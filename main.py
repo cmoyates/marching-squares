@@ -42,6 +42,10 @@ def mix_colors(color1, color2, ratio=0.5):
 
 def increment_selected_noise(increase: bool = True):
     global sampled_noise
+
+    if not min_drag_x or not max_drag_x or not min_drag_y or not max_drag_y:
+        return
+
     for x in range(ceil(min_drag_x / DOT_SPACING), ceil(max_drag_x / DOT_SPACING)):
         for y in range(ceil(min_drag_y / DOT_SPACING), ceil(max_drag_y / DOT_SPACING)):
             if increase:
