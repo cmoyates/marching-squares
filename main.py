@@ -1,10 +1,12 @@
 from perlin_noise import PerlinNoise
 import pygame
-from math import floor
+from math import floor, ceil
 
 WIDTH = 640
 HEIGHT = 360
 DOT_SPACING = 20
+
+NOISE_STEPS = 2
 
 MARCHING_SQUARES_LINES: list[list[float]] = [
     [],
@@ -25,6 +27,17 @@ MARCHING_SQUARES_LINES: list[list[float]] = [
     [],
 ]
 
+GREEN_RGB = (0, 255, 0)
+
+
+def mix_colors(color1, color2, ratio=0.5):
+    return (
+        color1[0] * ratio + color2[0] * (1 - ratio),
+        color1[1] * ratio + color2[1] * (1 - ratio),
+        color1[2] * ratio + color2[2] * (1 - ratio),
+    )
+
+
 # pygame setup
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -33,14 +46,33 @@ running = True
 
 noise = PerlinNoise(octaves=3.5, seed=777)
 
+
+def increment_selected_noise(increase: bool = True):
+    global sampled_noise
+    for x in range(ceil(min_drag_x / DOT_SPACING), ceil(max_drag_x / DOT_SPACING)):
+        for y in range(ceil(min_drag_y / DOT_SPACING), ceil(max_drag_y / DOT_SPACING)):
+            if increase:
+                sampled_noise[x][y] += 1.0 / (NOISE_STEPS - 1)
+            else:
+                sampled_noise[x][y] -= 1.0 / (NOISE_STEPS - 1)
+            sampled_noise[x][y] = min(max(sampled_noise[x][y], 0), 1)
+
+
 sampled_noise = []
 
 for x in range(0, WIDTH + DOT_SPACING, DOT_SPACING):
     sampled_noise_row = []
     for y in range(0, HEIGHT + DOT_SPACING, DOT_SPACING):
         n = noise([x / WIDTH, y / HEIGHT])
-        sampled_noise_row.append(floor(n + 1))
+        sampled_noise_row.append(floor(NOISE_STEPS * (n + 1) / 2))
     sampled_noise.append(sampled_noise_row)
+
+mouse_drag_start_positon = None
+mouse_drag_current_position = None
+min_drag_x = None
+max_drag_x = None
+min_drag_y = None
+max_drag_y = None
 
 while running:
     # poll for events
@@ -50,20 +82,30 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
                 running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:
+                print(event.pos)
+                mouse_drag_start_positon = event.pos
+            elif event.button == 4:
+                if mouse_drag_start_positon:
+                    increment_selected_noise(True)
+            elif event.button == 5:
+                if mouse_drag_start_positon:
+                    increment_selected_noise(False)
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1 and mouse_drag_start_positon:
+                mouse_drag_start_positon = None
+                mouse_drag_current_position = None
+                min_drag_x = None
+                max_drag_x = None
+                min_drag_y = None
+                max_drag_y = None
+        elif event.type == pygame.MOUSEMOTION:
+            if mouse_drag_start_positon:
+                mouse_drag_current_position = event.pos
 
     # fill the screen with a color to wipe away anything from last frame
     screen.fill("grey")
-
-    for x in range(WIDTH // DOT_SPACING + 1):
-        for y in range(HEIGHT // DOT_SPACING + 1):
-            noise_at_point = sampled_noise[x][y]
-            brightness = noise_at_point * 255
-            pygame.draw.circle(
-                screen,
-                (brightness, brightness, brightness),
-                (x * DOT_SPACING, y * DOT_SPACING),
-                5,
-            )
 
     for x in range(WIDTH // DOT_SPACING):
         for y in range(HEIGHT // DOT_SPACING):
@@ -79,7 +121,7 @@ while running:
                 + noise_bottom_left
             )
 
-            lines_points: list[float] = MARCHING_SQUARES_LINES[lines_index]
+            lines_points: list[float] = MARCHING_SQUARES_LINES[int(lines_index)]
             for i in range(0, len(lines_points), 2):
                 start = lines_points[i]
                 end = lines_points[i + 1]
@@ -88,6 +130,46 @@ while running:
                 end_x = (x + end[0]) * DOT_SPACING
                 end_y = (y + end[1]) * DOT_SPACING
                 pygame.draw.line(screen, "black", (start_x, start_y), (end_x, end_y))
+
+    if mouse_drag_start_positon and mouse_drag_current_position:
+        min_drag_x = min(mouse_drag_start_positon[0], mouse_drag_current_position[0])
+        max_drag_x = max(mouse_drag_start_positon[0], mouse_drag_current_position[0])
+        min_drag_y = min(mouse_drag_start_positon[1], mouse_drag_current_position[1])
+        max_drag_y = max(mouse_drag_start_positon[1], mouse_drag_current_position[1])
+
+        pygame.draw.rect(
+            screen,
+            "green",
+            (
+                min_drag_x,
+                min_drag_y,
+                max_drag_x - min_drag_x,
+                max_drag_y - min_drag_y,
+            ),
+            2,
+        )
+
+    for x in range(WIDTH // DOT_SPACING + 1):
+        for y in range(HEIGHT // DOT_SPACING + 1):
+            noise_at_point = sampled_noise[x][y]
+            brightness = noise_at_point * 255
+            color = (brightness, brightness, brightness)
+
+            if mouse_drag_start_positon and mouse_drag_current_position:
+                if (
+                    x * DOT_SPACING >= min_drag_x
+                    and x * DOT_SPACING <= max_drag_x
+                    and y * DOT_SPACING >= min_drag_y
+                    and y * DOT_SPACING <= max_drag_y
+                ):
+                    color = mix_colors(color, GREEN_RGB)
+
+            pygame.draw.circle(
+                screen,
+                color,
+                (x * DOT_SPACING, y * DOT_SPACING),
+                5,
+            )
 
     # flip() the display to put your work on screen
     pygame.display.flip()
