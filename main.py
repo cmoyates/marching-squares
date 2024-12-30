@@ -92,6 +92,7 @@ holding_cmd = False
 def main():
     # pygame setup
     pygame.init()
+    pygame.display.set_caption("Marching Squares Heightmap Generator")
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     clock = pygame.time.Clock()
     running = True
