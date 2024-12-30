@@ -1,6 +1,7 @@
 from perlin_noise import PerlinNoise
 import pygame
 from math import floor, ceil
+from PIL import Image
 
 WIDTH = 640
 HEIGHT = 360
@@ -58,6 +59,28 @@ def increment_selected_noise(increase: bool = True):
             sampled_noise[x][y] = min(max(sampled_noise[x][y], 0), 1)
 
 
+def save_image():
+    image = Image.new("RGB", (WIDTH, HEIGHT))
+
+    for x in range(WIDTH // DOT_SPACING + 1):
+        for y in range(HEIGHT // DOT_SPACING + 1):
+            noise_at_point = sampled_noise[x][y]
+            brightness = int(noise_at_point * 255)
+            color = (brightness, brightness, brightness)
+
+            image.paste(
+                color,
+                (
+                    x * DOT_SPACING,
+                    y * DOT_SPACING,
+                    (x + 1) * DOT_SPACING,
+                    (y + 1) * DOT_SPACING,
+                ),
+            )
+
+    image.save("output.png")
+
+
 sampled_noise = []
 
 for x in range(0, WIDTH + DOT_SPACING, DOT_SPACING):
@@ -74,6 +97,8 @@ max_drag_x = None
 min_drag_y = None
 max_drag_y = None
 
+holding_cmd = False
+
 while running:
     # poll for events
     for event in pygame.event.get():
@@ -82,9 +107,15 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
                 running = False
+            elif event.key == pygame.K_LMETA or event.key == pygame.K_RMETA:
+                holding_cmd = True
+            elif event.key == pygame.K_s and holding_cmd:
+                save_image()
+        elif event.type == pygame.KEYUP:
+            if event.key == pygame.K_LMETA or event.key == pygame.K_RMETA:
+                holding_cmd = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
-                print(event.pos)
                 mouse_drag_start_positon = event.pos
             elif event.button == 4:
                 if mouse_drag_start_positon:
