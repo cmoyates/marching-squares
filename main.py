@@ -8,7 +8,7 @@ WIDTH = 640
 HEIGHT = 360
 DOT_SPACING = 20
 
-NOISE_STEPS = 3
+NOISE_STEPS = 2
 
 MARCHING_SQUARES_LINES: list[list[float]] = [
     [],
@@ -90,7 +90,7 @@ holding_cmd = False
 
 
 def main():
-    # pygame setup
+    # PyGame Setup
     pygame.init()
     pygame.display.set_caption("Marching Squares Heightmap Generator")
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -101,16 +101,17 @@ def main():
 
     global sampled_noise, mouse_drag_start_positon, mouse_drag_current_position, min_drag_x, max_drag_x, min_drag_y, max_drag_y, holding_cmd
 
+    # Generate the noise
     for x in range(0, WIDTH + DOT_SPACING, DOT_SPACING):
         sampled_noise_row = []
         for y in range(0, HEIGHT + DOT_SPACING, DOT_SPACING):
             n = noise([x / WIDTH, y / HEIGHT])
             sampled_noise_row.append(floor((NOISE_STEPS) * ((n + 1) / 2)))
-        print(sampled_noise_row)
         sampled_noise.append(sampled_noise_row)
 
+    # Game loop
     while running:
-        # poll for events
+        # Poll for events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -145,9 +146,10 @@ def main():
                 if mouse_drag_start_positon:
                     mouse_drag_current_position = event.pos
 
-        # fill the screen with a color to wipe away anything from last frame
+        # Reset the screen
         screen.fill("grey")
 
+        # Draw the lines
         for noise_step in range(NOISE_STEPS - 1):
             for x in range(WIDTH // DOT_SPACING):
                 for y in range(HEIGHT // DOT_SPACING):
@@ -183,6 +185,7 @@ def main():
                             screen, "black", (start_x, start_y), (end_x, end_y)
                         )
 
+        # Draw the selection rectangle
         if mouse_drag_start_positon and mouse_drag_current_position:
             min_drag_x = min(
                 mouse_drag_start_positon[0], mouse_drag_current_position[0]
@@ -209,6 +212,7 @@ def main():
                 2,
             )
 
+        # Draw the dots
         for x in range(WIDTH // DOT_SPACING + 1):
             for y in range(HEIGHT // DOT_SPACING + 1):
                 noise_at_point = sampled_noise[x][y]
@@ -231,10 +235,11 @@ def main():
                     5,
                 )
 
-        # flip() the display to put your work on screen
+        # Flip() the display to put your work on screen
         pygame.display.flip()
 
-        clock.tick(60)  # limits FPS to 60
+        # Limit FPS to 60
+        clock.tick(60)
 
     pygame.quit()
 
