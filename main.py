@@ -7,7 +7,7 @@ from time import time
 WIDTH = 640
 HEIGHT = 360
 DOT_SPACING = 20
-
+DOT_RADIUS = 5
 NOISE_STEPS = 2
 
 MARCHING_SQUARES_LINES: list[list[float]] = [
@@ -41,18 +41,19 @@ def mix_colors(color1, color2, ratio=0.5):
 
 
 def increment_selected_noise(increase: bool = True):
-    global sampled_noise
+    global sampled_noise, dots, holding_left_mouse
 
-    if not min_drag_x or not max_drag_x or not min_drag_y or not max_drag_y:
+    if not holding_left_mouse:
         return
 
-    for x in range(ceil(min_drag_x / DOT_SPACING), ceil(max_drag_x / DOT_SPACING)):
-        for y in range(ceil(min_drag_y / DOT_SPACING), ceil(max_drag_y / DOT_SPACING)):
-            if increase:
-                sampled_noise[x][y] += 1.0
-            else:
-                sampled_noise[x][y] -= 1.0
-            sampled_noise[x][y] = min(max(sampled_noise[x][y], 0), NOISE_STEPS - 1)
+    for x in range(WIDTH // DOT_SPACING + 1):
+        for y in range(HEIGHT // DOT_SPACING + 1):
+            if dots[x][y]:
+                if increase:
+                    sampled_noise[x][y] += 1.0
+                else:
+                    sampled_noise[x][y] -= 1.0
+                sampled_noise[x][y] = min(max(sampled_noise[x][y], 0), NOISE_STEPS - 1)
 
 
 def save_image():
@@ -79,14 +80,11 @@ def save_image():
 
 sampled_noise = []
 
-mouse_drag_start_positon = None
-mouse_drag_current_position = None
-min_drag_x = None
-max_drag_x = None
-min_drag_y = None
-max_drag_y = None
+dots = []
 
 holding_cmd = False
+holding_left_mouse = False
+mouse_positon = None
 
 
 def main():
@@ -99,7 +97,7 @@ def main():
 
     noise = PerlinNoise(octaves=3.5, seed=time())
 
-    global sampled_noise, mouse_drag_start_positon, mouse_drag_current_position, min_drag_x, max_drag_x, min_drag_y, max_drag_y, holding_cmd
+    global sampled_noise, holding_left_mouse, holding_cmd, mouse_positon
 
     # Generate the noise
     for x in range(0, WIDTH + DOT_SPACING, DOT_SPACING):
@@ -108,6 +106,13 @@ def main():
             n = noise([x / WIDTH, y / HEIGHT])
             sampled_noise_row.append(floor((NOISE_STEPS) * ((n + 1) / 2)))
         sampled_noise.append(sampled_noise_row)
+
+    # Populate the dots
+    for x in range(WIDTH // DOT_SPACING + 1):
+        dots_row = []
+        for y in range(HEIGHT // DOT_SPACING + 1):
+            dots_row.append(False)
+        dots.append(dots_row)
 
     # Game loop
     while running:
@@ -127,24 +132,24 @@ def main():
                     holding_cmd = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    mouse_drag_start_positon = event.pos
+                    holding_left_mouse = True
+                    mouse_positon = pygame.mouse.get_pos()
                 elif event.button == 4:
-                    if mouse_drag_start_positon:
+                    if holding_left_mouse:
                         increment_selected_noise(True)
                 elif event.button == 5:
-                    if mouse_drag_start_positon:
+                    if holding_left_mouse:
                         increment_selected_noise(False)
             elif event.type == pygame.MOUSEBUTTONUP:
-                if event.button == 1 and mouse_drag_start_positon:
-                    mouse_drag_start_positon = None
-                    mouse_drag_current_position = None
-                    min_drag_x = None
-                    max_drag_x = None
-                    min_drag_y = None
-                    max_drag_y = None
+                if event.button == 1 and holding_left_mouse:
+                    holding_left_mouse = False
+                    mouse_positon = None
+                    for x in range(WIDTH // DOT_SPACING + 1):
+                        for y in range(HEIGHT // DOT_SPACING + 1):
+                            dots[x][y] = False
             elif event.type == pygame.MOUSEMOTION:
-                if mouse_drag_start_positon:
-                    mouse_drag_current_position = event.pos
+                if holding_left_mouse:
+                    mouse_positon = pygame.mouse.get_pos()
 
         # Reset the screen
         screen.fill("grey")
@@ -185,55 +190,61 @@ def main():
                             screen, "black", (start_x, start_y), (end_x, end_y)
                         )
 
-        # Draw the selection rectangle
-        if mouse_drag_start_positon and mouse_drag_current_position:
-            min_drag_x = min(
-                mouse_drag_start_positon[0], mouse_drag_current_position[0]
-            )
-            max_drag_x = max(
-                mouse_drag_start_positon[0], mouse_drag_current_position[0]
-            )
-            min_drag_y = min(
-                mouse_drag_start_positon[1], mouse_drag_current_position[1]
-            )
-            max_drag_y = max(
-                mouse_drag_start_positon[1], mouse_drag_current_position[1]
-            )
+        # Select dots that are close enough to the mouse
+        if holding_left_mouse:
+            for x in range(WIDTH // DOT_SPACING):
+                for y in range(HEIGHT // DOT_SPACING):
+                    dot_position = (x * DOT_SPACING, y * DOT_SPACING)
+                    dot_to_mouse_distance = (
+                        mouse_positon[0] - dot_position[0]
+                    ) ** 2 + (mouse_positon[1] - dot_position[1]) ** 2
 
-            pygame.draw.rect(
-                screen,
-                "green",
-                (
-                    min_drag_x,
-                    min_drag_y,
-                    max_drag_x - min_drag_x,
-                    max_drag_y - min_drag_y,
-                ),
-                2,
-            )
+                    if dot_to_mouse_distance < (DOT_SPACING + DOT_RADIUS) ** 2:
+                        dots[x][y] = True
+
+        min_dot_x = None
+        max_dot_x = None
+        min_dot_y = None
+        max_dot_y = None
 
         # Draw the dots
         for x in range(WIDTH // DOT_SPACING + 1):
             for y in range(HEIGHT // DOT_SPACING + 1):
-                noise_at_point = sampled_noise[x][y]
-                brightness = noise_at_point * 255 / (NOISE_STEPS - 1)
-                color = (brightness, brightness, brightness)
+                if dots[x][y]:
+                    if min_dot_x is None or x < min_dot_x:
+                        min_dot_x = x
+                    if max_dot_x is None or x > max_dot_x:
+                        max_dot_x = x
+                    if min_dot_y is None or y < min_dot_y:
+                        min_dot_y = y
+                    if max_dot_y is None or y > max_dot_y:
+                        max_dot_y = y
 
-                if mouse_drag_start_positon and mouse_drag_current_position:
-                    if (
-                        x * DOT_SPACING >= min_drag_x
-                        and x * DOT_SPACING <= max_drag_x
-                        and y * DOT_SPACING >= min_drag_y
-                        and y * DOT_SPACING <= max_drag_y
-                    ):
-                        color = mix_colors(color, GREEN_RGB)
+                    pygame.draw.circle(
+                        screen,
+                        GREEN_RGB,
+                        (x * DOT_SPACING, y * DOT_SPACING),
+                        DOT_RADIUS,
+                    )
 
-                pygame.draw.circle(
-                    screen,
-                    color,
-                    (x * DOT_SPACING, y * DOT_SPACING),
-                    5,
-                )
+        # Draw the selection box
+        if (
+            min_dot_x is not None
+            and max_dot_x is not None
+            and min_dot_y is not None
+            and max_dot_y is not None
+        ):
+            pygame.draw.rect(
+                screen,
+                GREEN_RGB,
+                (
+                    min_dot_x * DOT_SPACING - DOT_RADIUS,
+                    min_dot_y * DOT_SPACING - DOT_RADIUS,
+                    (max_dot_x - min_dot_x) * DOT_SPACING + 2 * DOT_RADIUS,
+                    (max_dot_y - min_dot_y) * DOT_SPACING + 2 * DOT_RADIUS,
+                ),
+                1,
+            )
 
         # Flip() the display to put your work on screen
         pygame.display.flip()
